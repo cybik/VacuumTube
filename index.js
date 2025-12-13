@@ -4,6 +4,8 @@ const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const fs = require('fs')
 const chokidar = require('chokidar')
+const dbus = require('@jellybrick/dbus-next');
+dbus.setBigIntCompat(true);
 
 electron.app.setName('VacuumTube')
 
@@ -34,10 +36,16 @@ const youtubeUserAgent = `Mozilla/5.0 (PS4; Leanback Shell) Cobalt/26.lts.0-qa; 
 const youtubeClientUserAgent = `Mozilla/5.0 (PS4; Leanback Shell) Cobalt/19.lts.0-qa; compatible; VacuumTube/${package.version}` //for youtube, somewhere in client scripts this matters because it parses cobalt version explicitly from the user agent, which affects playability because cobalt 26 "should" work with widevine, when we can't support that
 const userAgent = `VacuumTube/${package.version}` //for anything else
 
-const runningOnSteam = process.env.SteamOS === '1' && process.env.SteamGamepadUI === '1'
+const runningOnSteamFullScreen = process.env.SteamGamepadUI === '1'
+const runningOnSteamOS = process.env.SteamOS === '1' || process.env.SteamDeck === '1'
+const runningOnSteam = runningOnSteamOS && runningOnSteamFullScreen
 
 let win;
 let config;
+
+// dbus
+let bus; // dbus session bus, if necessary
+let Variant = dbus.Variant;
 
 async function main() {
     if (process.argv.includes('--version') || process.argv.includes('-v')) {
@@ -440,8 +448,26 @@ async function createWindow() {
 
     //keep window title as VacuumTube
     win.webContents.on('page-title-updated', () => {
-        win.setTitle('VacuumTube')
+        win.setTitle('VacuumTube');
     })
+
+    if (runningOnSteamOS && runningOnSteamFullScreen) {
+        bus = dbus.sessionBus();
+        let portal_desktop_proxy = await bus.getProxyObject(
+            'org.freedesktop.portal.Desktop',
+            '/org/freedesktop/portal/desktop'
+        );
+        let inhibit_interface = portal_desktop_proxy.getInterface('org.freedesktop.portal.Inhibit');
+        let inhibitor = await inhibit_interface.Inhibit(
+            'VacuumTube',
+            4,
+            {
+                'handle_token': new Variant('s', 'VacuumTube'),
+                'reason':       new Variant('s', 'uninterrupted-playback')
+            }
+        );
+        console.log('Inhibited from screen saver, output: ' + inhibitor);
+    }
 }
 
 main()
