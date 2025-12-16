@@ -451,6 +451,8 @@ async function createWindow() {
         win.setTitle('VacuumTube');
     })
 
+    // https://wakepy.readthedocs.io/stable/methods-reference.html#org-freedesktop-powermanagement
+    // there's a powermanagement dbus? can this be used?
     if (runningOnSteamOS && runningOnSteamFullScreen) {
         bus = dbus.sessionBus();
         let portal_desktop_proxy = await bus.getProxyObject(
@@ -463,7 +465,7 @@ async function createWindow() {
             4,
             {
                 'handle_token': new Variant('s', 'VacuumTube'),
-                'reason':       new Variant('s', 'uninterrupted-playback')
+                'reason':       new Variant('s', 'VacuumTube WakeLock')
             }
         );
         console.log('Inhibited from screen saver, output: ' + inhibitor);
